@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PortEV - Revolutionizing Home Energy Storage</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #00ff88;
+            --secondary: #0066ff;
+            --dark: #0a0e27;
+            --darker: #050812;
+            --light: #ffffff;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--darker);
+            color: var(--light);
+            overflow-x: hidden;
+            line-height: 1.6;
+        }
+
+        .language-toggle {
+            position: fixed;
+            top: 90px;
+            right: 20px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50px;
+            padding: 10px 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .language-toggle:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .language-toggle select {
+            background: transparent;
+            border: none;
+            color: var(--light);
+            font-size: 14px;
+            cursor: pointer;
+            outline: none;
+        }
+
+        .language-toggle option {
+            background: var(--dark);
+        }
+
+        nav {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            padding: 20px 50px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 999;
+            background: rgba(10, 14, 39, 0.8);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(0, 255, 136, 0.1);
+        }
+
+        .logo {
+            font-size: 32px;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -1px;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 40px;
+        }
+
+        .nav-links a {
+            color: var(--light);
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .nav-links a:hover {
+            color: var(--primary);
+        }
+
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+            padding: 0 50px;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            width: 800px;
+            height: 800px;
+            background: radial-gradient(circle, rgba(0, 255, 136, 0.15) 0%, transparent 70%);
+            top: -400px;
+            right: -400px;
+            animation: pulse 8s ease-in-out infinite;
+        }
+
+        .hero::after {
+            content: '';
+            position: absolute;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(0, 102, 255, 0.15) 0%, transparent 70%);
+            bottom: -300px;
+            left: -300px;
+            animation: pulse 10s ease-in-out infinite reverse;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+        }
+
+        .hero-content {
+            max-width: 1200px;
+            position: relative;
+            z-index: 1;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: clamp(48px, 8vw, 96px);
+            font-weight: 900;
+            margin-bottom: 30px;
+            line-height: 1.1;
+            background: linear-gradient(135deg, var(--light) 0%, var(--primary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: fadeInUp 1s ease;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .subtitle {
+            font-size: clamp(20px, 3vw, 32px);
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 50px;
+            animation: fadeInUp 1s ease 0.2s backwards;
+        }
+
+        .cta-button {
+            display: inline-block;
+            padding: 20px 50px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: var(--darker);
+            text-decoration: none;
+            border-radius: 50px;
+            font-weight: 700;
+            font-size: 18px;
+            transition: all 0.3s ease;
+            animation: fadeInUp 1s ease 0.4s backwards;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .cta-button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, var(--secondary), var(--primary));
+            transition: left 0.3s ease;
+        }
+
+        .cta-button span {
+            position: relative;
+            z-index: 1;
+        }
+
+        .cta-button:hover::before {
+            left: 0;
+        }
+
+        .cta-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 20px 40px rgba(0, 255, 136, 0.3);
+        }
+
+        .features {
+            padding: 150px 50px;
+            background: linear-gradient(180deg, var(--darker) 0%, var(--dark) 100%);
+        }
+
+        .features-grid {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 40px;
+        }
+
+        .feature-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 40px;
+            transition: all 0.4s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.1) 0%, rgba(0, 102, 255, 0.1) 100%);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-10px);
+            border-color: var(--primary);
+            box-shadow: 0 20px 60px rgba(0, 255, 136, 0.2);
+        }
+
+        .feature-card:hover::before {
+            opacity: 1;
+        }
+
+        .feature-icon {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 20px;
+            position: relative;
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(0, 255, 136, 0.3);
+        }
+
+        .feature-icon svg {
+            width: 32px;
+            height: 32px;
+            fill: none;
+            stroke: var(--dark);
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .feature-card h3 {
+            font-size: 24px;
+            margin-bottom: 15px;
+            color: var(--primary);
+            position: relative;
+            z-index: 1;
+        }
+
+        .feature-card p {
+            color: rgba(255, 255, 255, 0.7);
+            position: relative;
+            z-index: 1;
+            line-height: 1.8;
+        }
+
+        .benefits {
+            padding: 150px 50px;
+            background: var(--dark);
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: clamp(36px, 6vw, 64px);
+            font-weight: 800;
+            margin-bottom: 80px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .benefits-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 30px;
+        }
+
+        .benefit-item {
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.05) 0%, rgba(0, 102, 255, 0.05) 100%);
+            border: 2px solid transparent;
+            border-radius: 15px;
+            padding: 35px;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            position: relative;
+        }
+
+        .benefit-icon {
+            width: 56px;
+            height: 56px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border-radius: 12px;
+            box-shadow: 0 6px 20px rgba(0, 255, 136, 0.25);
+        }
+
+        .benefit-icon svg {
+            width: 28px;
+            height: 28px;
+            fill: none;
+            stroke: var(--dark);
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .benefit-item:hover {
+            border-color: var(--primary);
+            transform: scale(1.05);
+            box-shadow: 0 15px 40px rgba(0, 255, 136, 0.2);
+        }
+
+        .benefit-item h4 {
+            font-size: 22px;
+            margin-bottom: 12px;
+            color: var(--primary);
+        }
+
+        .benefit-item p {
+            color: rgba(255, 255, 255, 0.8);
+            line-height: 1.7;
+        }
+
+        .pricing {
+            padding: 150px 50px;
+            background: linear-gradient(180deg, var(--dark) 0%, var(--darker) 100%);
+        }
+
+        .pricing-card {
+            max-width: 600px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.03);
+            border: 2px solid var(--primary);
+            border-radius: 30px;
+            padding: 60px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .pricing-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(0, 255, 136, 0.1) 0%, transparent 50%);
+            animation: rotate 20s linear infinite;
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .pricing-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: var(--darker);
+            padding: 10px 30px;
+            border-radius: 50px;
+            font-weight: 700;
+            margin-bottom: 30px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .price {
+            font-size: 72px;
+            font-weight: 900;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .price-description {
+            font-size: 20px;
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 40px;
+            position: relative;
+            z-index: 1;
+        }
+
+        footer {
+            padding: 80px 50px 40px;
+            background: var(--darker);
+            border-top: 1px solid rgba(0, 255, 136, 0.2);
+            text-align: center;
+        }
+
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .footer-logo {
+            font-size: 36px;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 20px;
+        }
+
+        .footer-text {
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 30px;
+        }
+
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+        }
+
+        .footer-links a {
+            color: rgba(255, 255, 255, 0.7);
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .footer-links a:hover {
+            color: var(--primary);
+        }
+
+        .copyright {
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 14px;
+        }
+
+        @media (max-width: 768px) {
+            nav {
+                padding: 15px 20px;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .hero, .features, .benefits, .pricing {
+                padding: 80px 20px;
+            }
+
+            .features-grid, .benefits-container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="language-toggle">
+        <select id="languageSelector" onchange="changeLanguage()">
+            <option value="en">English</option>
+            <option value="pt">Português</option>
+        </select>
+    </div>
+
+    <nav>
+        <div class="logo" data-en="PortEV" data-pt="PortEV">PortEV</div>
+        <div class="nav-links">
+            <a href="#features" data-en="Features" data-pt="Funcionalidades">Features</a>
+            <a href="#benefits" data-en="Benefits" data-pt="Benefícios">Benefits</a>
+            <a href="#pricing" data-en="Pricing" data-pt="Preços">Pricing</a>
+        </div>
+    </nav>
+
+    <section class="hero">
+        <div class="hero-content">
+            <h1 data-en="Power Your Home, Sustainably" data-pt="Energize a Sua Casa, Sustentavelmente">Power Your Home, Sustainably</h1>
+            <p class="subtitle" data-en="Premium second-life battery systems at a fraction of the cost" data-pt="Sistemas de baterias segunda vida premium a uma fração do custo">Premium second-life battery systems at a fraction of the cost</p>
+            <a href="#pricing" class="cta-button"><span data-en="Get Started" data-pt="Começar Agora">Get Started</span></a>
+        </div>
+    </section>
+
+    <section id="features" class="features">
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="12" cy="12" r="5"/>
+                        <line x1="12" y1="1" x2="12" y2="3"/>
+                        <line x1="12" y1="21" x2="12" y2="23"/>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                        <line x1="1" y1="12" x2="3" y2="12"/>
+                        <line x1="21" y1="12" x2="23" y2="12"/>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                    </svg>
+                </div>
+                <h3 data-en="Solar Energy Storage" data-pt="Armazenamento Solar">Solar Energy Storage</h3>
+                <p data-en="Maximize your solar investment by storing excess energy for use when you need it most" data-pt="Maximize o seu investimento solar armazenando energia excedente para usar quando mais precisar">Maximize your solar investment by storing excess energy for use when you need it most</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                    </svg>
+                </div>
+                <h3 data-en="Peak Shaving" data-pt="Peak Shaving">Peak Shaving</h3>
+                <p data-en="Reduce energy costs by avoiding peak-time electricity rates with intelligent load management" data-pt="Reduza custos energéticos evitando tarifas em horas de ponta com gestão inteligente de carga">Reduce energy costs by avoiding peak-time electricity rates with intelligent load management</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <line x1="12" y1="1" x2="12" y2="23"/>
+                        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                    </svg>
+                </div>
+                <h3 data-en="Energy Arbitrage" data-pt="Arbitragem Energética">Energy Arbitrage</h3>
+                <p data-en="Buy low, sell high - profit from electricity price fluctuations automatically" data-pt="Compre barato, venda caro - lucre automaticamente com flutuações de preços de eletricidade">Buy low, sell high - profit from electricity price fluctuations automatically</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="1" y="6" width="18" height="12" rx="2" ry="2"/>
+                        <line x1="23" y1="13" x2="19" y2="13"/>
+                    </svg>
+                </div>
+                <h3 data-en="Backup Power" data-pt="Energia de Backup">Backup Power</h3>
+                <p data-en="Never worry about blackouts - keep your home powered during grid outages" data-pt="Nunca se preocupe com apagões - mantenha a sua casa energizada durante falhas da rede">Never worry about blackouts - keep your home powered during grid outages</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="2" y1="12" x2="22" y2="12"/>
+                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                    </svg>
+                </div>
+                <h3 data-en="Off-Grid Capable" data-pt="Capacidade Off-Grid">Off-Grid Capable</h3>
+                <p data-en="Achieve energy independence and disconnect from the grid completely if desired" data-pt="Conquiste independência energética e desconecte-se completamente da rede se desejar">Achieve energy independence and disconnect from the grid completely if desired</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <line x1="18" y1="20" x2="18" y2="10"/>
+                        <line x1="12" y1="20" x2="12" y2="4"/>
+                        <line x1="6" y1="20" x2="6" y2="14"/>
+                    </svg>
+                </div>
+                <h3 data-en="Smart Optimization" data-pt="Otimização Inteligente">Smart Optimization</h3>
+                <p data-en="AI-powered system learns your usage patterns for maximum efficiency and savings" data-pt="Sistema com IA aprende os seus padrões de uso para máxima eficiência e poupança">AI-powered system learns your usage patterns for maximum efficiency and savings</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M9 11l3 3L22 4"/>
+                        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                    </svg>
+                </div>
+                <h3 data-en="Advanced Testing" data-pt="Testes Avançados">Advanced Testing</h3>
+                <p data-en="Superior and more affordable battery testing methods ensure reliability and performance" data-pt="Métodos de teste de bateria superiores e mais acessíveis garantem fiabilidade e desempenho">Superior and more affordable battery testing methods ensure reliability and performance</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="benefits" class="benefits">
+        <h2 class="section-title" data-en="Why Choose PortEV?" data-pt="Porquê Escolher a PortEV?">Why Choose PortEV?</h2>
+        <div class="benefits-container">
+            <div class="benefit-item">
+                <h4 data-en="Reduce Your Bill" data-pt="Reduza a Conta">Reduce Your Bill</h4>
+                <p data-en="Cut your electricity costs by up to 70% with intelligent energy management" data-pt="Reduza os seus custos de eletricidade até 70% com gestão energética inteligente">Cut your electricity costs by up to 70% with intelligent energy management</p>
+            </div>
+            <div class="benefit-item">
+                <h4 data-en="Earn Money" data-pt="Ganhe Dinheiro">Earn Money</h4>
+                <p data-en="Generate passive income by selling stored energy back to the grid" data-pt="Gere rendimento passivo vendendo energia armazenada de volta à rede">Generate passive income by selling stored energy back to the grid</p>
+            </div>
+            <div class="benefit-item">
+                <h4 data-en="Environmental Impact" data-pt="Impacto Ambiental">Environmental Impact</h4>
+                <p data-en="Reduce your carbon footprint while giving batteries a second life" data-pt="Reduza a sua pegada de carbono enquanto dá uma segunda vida às baterias">Reduce your carbon footprint while giving batteries a second life</p>
+            </div>
+            <div class="benefit-item">
+                <h4 data-en="Fraction of the Cost" data-pt="Fração do Preço">Fraction of the Cost</h4>
+                <p data-en="Premium quality at 40-60% less than new battery systems" data-pt="Qualidade premium a 40-60% menos que sistemas de baterias novas">Premium quality at 40-60% less than new battery systems</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="pricing" class="pricing">
+        <h2 class="section-title" data-en="Sustainable Pricing" data-pt="Preços Sustentáveis">Sustainable Pricing</h2>
+        <div class="pricing-card">
+            <div class="pricing-badge" data-en="Second-Life Technology" data-pt="Tecnologia Segunda Vida">Second-Life Technology</div>
+            <div class="price" data-en="40-60%" data-pt="40-60%">40-60%</div>
+            <p class="price-description" data-en="Less than new battery systems" data-pt="Menos que sistemas de baterias novas">Less than new battery systems</p>
+            <p style="position: relative; z-index: 1; color: rgba(255, 255, 255, 0.8); margin-bottom: 30px; line-height: 1.8;" data-en="Get premium energy storage without the premium price tag. Our second-life batteries deliver exceptional performance and reliability while keeping your investment affordable." data-pt="Obtenha armazenamento de energia premium sem o preço premium. As nossas baterias segunda vida entregam desempenho e fiabilidade excecionais mantendo o seu investimento acessível.">Get premium energy storage without the premium price tag. Our second-life batteries deliver exceptional performance and reliability while keeping your investment affordable.</p>
+            <a href="#contact" class="cta-button"><span data-en="Request Quote" data-pt="Pedir Orçamento">Request Quote</span></a>
+        </div>
+    </section>
+
+    <footer>
+        <div class="footer-content">
+            <div class="footer-logo">PortEV</div>
+            <p class="footer-text" data-en="Revolutionizing residential energy storage with sustainable, affordable solutions" data-pt="Revolucionando o armazenamento de energia residencial com soluções sustentáveis e acessíveis">Revolutionizing residential energy storage with sustainable, affordable solutions</p>
+            <div class="footer-links">
+                <a href="#" data-en="About Us" data-pt="Sobre Nós">About Us</a>
+                <a href="#" data-en="Technology" data-pt="Tecnologia">Technology</a>
+                <a href="#" data-en="Contact" data-pt="Contacto">Contact</a>
+                <a href="#" data-en="Privacy" data-pt="Privacidade">Privacy</a>
+            </div>
+            <p class="copyright" data-en="© 2025 PortEV. All rights reserved." data-pt="© 2025 PortEV. Todos os direitos reservados.">© 2025 PortEV. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script>
+        const translations = {
+            en: {},
+            pt: {}
+        };
+
+        document.querySelectorAll('[data-en]').forEach(el => {
+            const key = el.dataset.en;
+            translations.en[key] = el.dataset.en;
+            translations.pt[key] = el.dataset.pt;
+        });
+
+        function changeLanguage() {
+            const lang = document.getElementById('languageSelector').value;
+            document.querySelectorAll('[data-en]').forEach(el => {
+                const key = el.dataset.en;
+                if (translations[lang][key]) {
+                    el.textContent = translations[lang][key];
+                }
+            });
+        }
+
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html>
