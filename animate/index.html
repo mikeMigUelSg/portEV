@@ -1,0 +1,1232 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PortEV - 3D Energy Flow System</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+      background:#050812;color:#fff;overflow:hidden;height:100vh;
+    }
+    #canvas{width:100%;height:100vh;display:block}
+    .loading{
+      position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+      font-size:24px;color:#00ff88;font-weight:bold;z-index:100;text-align:center;
+    }
+  </style>
+</head>
+<body>
+<div class="loading" id="loading">Carregando Sistema 3D...</div>
+<canvas id="canvas"></canvas>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+let scene, camera, renderer;
+let house, solarPanelArray, batterySystem, evCar, powerGrid;
+let cableSystem = [];
+let clock = new THREE.Clock();
+let materials = {};
+const BASE_RADIUS = 15;
+const ORBIT_RADIUS = BASE_RADIUS * 1.5; // 30% mais afastado
+const ROT_SPEED = 0.7;
+
+// —— parâmetros do telhado ——
+const ROOF = {
+  height: 3,
+  width: 13,
+  depth: 11,
+  baseY: 6,
+  ridgeY: 9,
+  halfWidth: 13/2
+};
+const ROOF_SLOPE_RAD = Math.atan(ROOF.height / ROOF.halfWidth); // ~24.8°
+const ROOF_SLOPE = ROOF.height / ROOF.halfWidth;               // declive
+
+// y(x) em qualquer água: y = 9 - slope * |x|
+function roofYAtX(x){
+  return ROOF.ridgeY - ROOF_SLOPE * Math.abs(x);
+}
+
+function init(){
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x87CEEB);
+  scene.fog = new THREE.FogExp2(0x87CEEB, 0.008);
+
+  camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 500);
+  camera.position.set(25, 15, 25);
+  camera.lookAt(0, 3, 0);
+
+  renderer = new THREE.WebGLRenderer({
+    canvas: document.getElementById('canvas'),
+    antialias:true, alpha:false
+  });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.3;
+
+  setupLighting();
+  createMaterials();
+  createEnvironment();        // grid infinita + “lote” de concreto (sem flicker)
+  createRealisticHouse();     // inclui telhado
+  createRoofSolarArray();     // PAINEL rodado 90° e na água esquerda
+  createWallMountedBattery(); // leds visíveis
+  createImprovedCar();        // carro melhorado
+  createPowerGrid();          // no “lote”
+  createCableSystem();
+
+  document.getElementById('loading').style.display = 'none';
+}
+
+function setupLighting(){
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
+  scene.add(ambientLight);
+
+  const sunLight = new THREE.DirectionalLight(0xfff5e6, 2.6);
+  sunLight.position.set(50, 60, 30);
+  sunLight.castShadow = true;
+  sunLight.shadow.camera.left = -60;
+  sunLight.shadow.camera.right = 60;
+  sunLight.shadow.camera.top = 60;
+  sunLight.shadow.camera.bottom = -60;
+  sunLight.shadow.camera.near = 1;
+  sunLight.shadow.camera.far = 200;
+  sunLight.shadow.mapSize.set(4096,4096);
+  sunLight.shadow.bias = -0.0005;
+  scene.add(sunLight);
+
+  const hemiLight = new THREE.HemisphereLight(0x87CEEB, 0x3a3a3a, 0.6);
+  scene.add(hemiLight);
+}
+
+function createMaterials(){
+  // === Carrega textura de ruído base (Perlin Noise) ===
+  const textureLoader = new THREE.TextureLoader();
+  const noiseTexture = textureLoader.load('https://threejs.org/examples/textures/perlin-512.png');
+
+  // Repete a textura para evitar esticamento
+  noiseTexture.wrapS = noiseTexture.wrapT = THREE.RepeatWrapping;
+  noiseTexture.repeat.set(2, ); // ajusta escala (maior → mais fino o grão)
+
+  // ===== MATERIAIS =====
+  materials.brick = new THREE.MeshStandardMaterial({
+    color: 0x8B4513,
+    roughness: 0.95,
+    metalness: 0,
+    normalMap: noiseTexture,
+    normalScale: new THREE.Vector2(0.35, 0.35)
+  });
+
+  materials.darkRoof = new THREE.MeshStandardMaterial({
+    color: 0x5a5a5a,
+    roughness: 0.8,
+    metalness: 0.2,
+    normalMap: noiseTexture,
+    normalScale: new THREE.Vector2(0.25, 0.25)
+  });
+
+  materials.windowGlass = new THREE.MeshPhysicalMaterial({
+    color: 0x4a4a4a,
+    metalness: 0.1,
+    roughness: 0.1,
+    transparent: true,
+    opacity: 0.5,
+    transmission: 0.8 // vidro, sem normalMap
+  });
+
+  materials.windowFrame = new THREE.MeshStandardMaterial({
+    color: 0x333333,
+    roughness: 0.4,
+    metalness: 0.7,
+    normalMap: noiseTexture,
+    normalScale: new THREE.Vector2(0.25, 0.25)
+  });
+
+  materials.door = new THREE.MeshStandardMaterial({
+    color: 0x3a2817,
+    roughness: 0.8,
+    metalness: 0.1,
+    normalMap: noiseTexture,
+    normalScale: new THREE.Vector2(0.35, 0.35)
+  });
+
+  materials.solarCell = new THREE.MeshPhysicalMaterial({
+    color: 0x0a0a20,
+    roughness: 0.15,
+    metalness: 0.95,
+    clearcoat: 1.0,
+    clearcoatRoughness: 0.05,
+    normalMap: noiseTexture,
+    normalScale: new THREE.Vector2(0.15, 0.15)
+  });
+
+  materials.solarFrame = new THREE.MeshStandardMaterial({
+    color: 0x1a1a1a,
+    roughness: 0.4,
+    metalness: 0.9,
+    normalMap: noiseTexture,
+    normalScale: new THREE.Vector2(0.2, 0.2)
+  });
+
+  materials.batteryCasing = new THREE.MeshPhysicalMaterial({
+    color: 0xcccccc,
+    roughness: 0.3,
+    metalness: 0.7,
+    clearcoat: 0.4,
+    normalMap: noiseTexture,
+    normalScale: new THREE.Vector2(0.25, 0.25)
+  });
+
+  materials.batteryAccent = new THREE.MeshStandardMaterial({
+    color: 0x00ff88,
+    roughness: 0.3,
+    metalness: 0.7,
+    emissive: 0x00ff88,
+    emissiveIntensity: 0.3,
+    normalMap: noiseTexture,
+    normalScale: new THREE.Vector2(0.2, 0.2)
+  });
+
+  materials.carPaintRed = new THREE.MeshPhysicalMaterial({
+    color: 0xcc0000,
+    roughness: 0.22,
+    metalness: 0.85,
+    clearcoat: 1.0,
+    clearcoatRoughness: 0.08,
+    normalMap: noiseTexture,
+    normalScale: new THREE.Vector2(0.3, 0.3)
+  });
+
+  materials.carGlass = new THREE.MeshPhysicalMaterial({
+    color: 0x1a1a1a,
+    metalness: 0.1,
+    roughness: 0.05,
+    transparent: true,
+    opacity: 0.28,
+    transmission: 0.9 // vidro — sem ruído
+  });
+
+  materials.tire = new THREE.MeshStandardMaterial({
+    color: 0x0a0a0a,
+    roughness: 0.95,
+    metalness: 0,
+    normalMap: noiseTexture,
+    normalScale: new THREE.Vector2(0.5, 0.5)
+  });
+
+  materials.chrome = new THREE.MeshStandardMaterial({
+    color: 0xe0e0e0,
+    roughness: 0.1,
+    metalness: 0.95,
+    normalMap: noiseTexture,
+    normalScale: new THREE.Vector2(0.2, 0.2)
+  });
+
+  materials.concrete = new THREE.MeshStandardMaterial({
+    color: 0xa3a3a3,
+    roughness: 0.9,
+    metalness: 0,
+    normalMap: noiseTexture,
+    normalScale: new THREE.Vector2(0.4, 0.4)
+  });
+
+  materials.asphalt = new THREE.MeshStandardMaterial({
+    color: 0x111111,
+    roughness: 0.98,
+    metalness: 0,
+    normalMap: noiseTexture,
+    normalScale: new THREE.Vector2(0.6, 0.6)
+  });
+}
+
+function createEnvironment(){
+  // Plano base
+  const basePlane = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), materials.asphalt);
+  basePlane.rotation.x = -Math.PI/2;
+  basePlane.position.y = -0.001;
+  basePlane.receiveShadow = true;
+  scene.add(basePlane);
+
+  // Grid infinita
+  const grid = new THREE.GridHelper(4000, 400, 0x333333, 0x333333);
+  grid.position.y = 0.0;
+  grid.renderOrder = 0;
+  scene.add(grid);
+
+  // ====== “Lote” de concreto com textura de azulejos ======
+  // ====== “Lote” com azulejos nas cores CSS --primary / --secondary ======
+  const css = getComputedStyle(document.documentElement);
+  const PRIMARY   = (css.getPropertyValue('--primary')   || '#00ff88').trim();
+  const SECONDARY = (css.getPropertyValue('--secondary') || '#0066ff').trim();
+
+  // gera uma textura de azulejo (checker + juntas)
+  function makeTileTexture(c1, c2){
+    const S = 50, TILE = 25, GROUT = 1; // dimensão, tamanho do azulejo e junta
+    const cv = document.createElement('canvas'); cv.width = cv.height = S;
+    const ctx = cv.getContext('2d');
+
+    for(let y=0; y<S; y+=TILE){
+      for(let x=0; x<S; x+=TILE){
+        ctx.fillStyle = ((x+y)/TILE) % 2 ? c1 : c2;   // padrão xadrez
+        ctx.fillRect(x, y, TILE, TILE);
+        // juntas (grout)
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        ctx.fillRect(x, y, TILE, GROUT);
+        ctx.fillRect(x, y, GROUT, TILE);
+      }
+    }
+    // bordas finais
+    ctx.fillRect(0, S-GROUT, S, GROUT);
+    ctx.fillRect(S-GROUT, 0, GROUT, S);
+
+    const tex = new THREE.CanvasTexture(cv);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(8, 8); // nº de azulejos no lote (ajusta à tua escala)
+    return tex;
+  }
+
+  const lotTex = makeTileTexture(PRIMARY, SECONDARY);
+
+  const lotMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    roughness: 0.7,
+    metalness: 0.1,
+    map: lotTex,
+    polygonOffset: true,
+    polygonOffsetFactor: 1,
+    polygonOffsetUnits: 1
+  });
+
+  const lot = new THREE.Mesh(new THREE.PlaneGeometry(70, 70), lotMat);
+  lot.rotation.x = -Math.PI/2;
+  lot.position.y = 0.12;
+  lot.receiveShadow = true;
+  scene.add(lot);
+
+}
+
+
+function createRealisticHouse(){
+  const houseGroup = new THREE.Group();
+
+  // Corpo da casa
+  const mainWallGeometry = new THREE.BoxGeometry(12, 6, 10);
+  const mainWall = new THREE.Mesh(mainWallGeometry, materials.brick);
+  mainWall.position.y = 3;
+  mainWall.castShadow = true;
+  mainWall.receiveShadow = true;
+  houseGroup.add(mainWall);
+
+  // Telhado de duas águas
+  // esquerda
+  const roofLeftShape = new THREE.Shape();
+  roofLeftShape.moveTo(-ROOF.width/2, 0);
+  roofLeftShape.lineTo(0, ROOF.height);
+  roofLeftShape.lineTo(0, 0);
+  roofLeftShape.lineTo(-ROOF.width/2, 0);
+  const roofLeftGeometry = new THREE.ExtrudeGeometry(roofLeftShape, {depth: ROOF.depth, bevelEnabled:false});
+  const roofLeft = new THREE.Mesh(roofLeftGeometry, materials.darkRoof);
+  roofLeft.position.set(0, ROOF.baseY, -ROOF.depth/2);
+  roofLeft.castShadow = true;
+  houseGroup.add(roofLeft);
+
+  // direita
+  const roofRightShape = new THREE.Shape();
+  roofRightShape.moveTo(0, 0);
+  roofRightShape.lineTo(0, ROOF.height);
+  roofRightShape.lineTo(ROOF.width/2, 0);
+  roofRightShape.lineTo(0, 0);
+  const roofRightGeometry = new THREE.ExtrudeGeometry(roofRightShape, {depth: ROOF.depth, bevelEnabled:false});
+  const roofRight = new THREE.Mesh(roofRightGeometry, materials.darkRoof);
+  roofRight.position.set(0, ROOF.baseY, -ROOF.depth/2);
+  roofRight.castShadow = true;
+  houseGroup.add(roofRight);
+
+  // Empenas
+  const gableShape = new THREE.Shape();
+  gableShape.moveTo(-6, 0);
+  gableShape.lineTo(0, 3);
+  gableShape.lineTo(6, 0);
+  gableShape.lineTo(-6, 0);
+  const gableGeometry = new THREE.ShapeGeometry(gableShape);
+
+  const gableFront = new THREE.Mesh(gableGeometry, materials.brick);
+  gableFront.position.set(0, 6, 5);
+  houseGroup.add(gableFront);
+
+  const gableBack = new THREE.Mesh(gableGeometry, materials.brick);
+  gableBack.position.set(0, 6, -5);
+  gableBack.rotation.y = Math.PI;
+  houseGroup.add(gableBack);
+
+  // Chaminé
+  const chimney = new THREE.Mesh(new THREE.BoxGeometry(0.8, 2.5, 0.8), materials.brick);
+  chimney.position.set(3, 9, 1);
+  chimney.castShadow = true;
+  houseGroup.add(chimney);
+
+  // Porta
+  const doorGroup = createDoor();
+  doorGroup.position.set(-4.5, 1.25, 5.01);
+  houseGroup.add(doorGroup);
+
+  // Janelas (com filtros de colisão porta/bateria)
+  addWindowsAllAround(houseGroup);
+
+  scene.add(houseGroup);
+  house = houseGroup;
+}
+
+function addWindowsAllAround(houseGroup){
+  const yLevels = [2.2, 3.6];
+  const xColsFrontBack = [-3.8, 0, 3.8];
+  const zColsSides = [-3.8, 0, 3.8];
+
+  function overlapsDoor(x, y, z){
+    const doorZ = 5.01;
+    if (Math.abs(z - doorZ) > 0.05) return false;
+    const doorXMin = -5.05, doorXMax = -3.95;
+    const winHalfW = 0.8;
+    const mayTouchY = (y <= 2.6);
+    return mayTouchY && (x - winHalfW < doorXMax && x + winHalfW > doorXMin);
+  }
+
+  function overlapsBattery(x, y, z){
+    const leftWallX = -6.01;
+    if (Math.abs(x - leftWallX) > 0.2) return false;
+    return (z > -0.8 && z < 0.8);
+  }
+
+  // Frente
+  yLevels.forEach(y=>{
+    xColsFrontBack.forEach(x=>{
+      const z = 5.01;
+      if (overlapsDoor(x,y,z)) return;
+      const w = createWindow();
+      w.position.set(x, y, z);
+      houseGroup.add(w);
+    });
+  });
+
+  // Trás
+  yLevels.forEach(y=>{
+    xColsFrontBack.forEach(x=>{
+      const w = createWindow();
+      w.position.set(x, y, -5.01);
+      w.rotation.y = Math.PI;
+      houseGroup.add(w);
+    });
+  });
+
+  // Lado esquerdo (evitar bateria)
+  yLevels.forEach(y=>{
+    zColsSides.forEach(z=>{
+      const x = -6.01;
+      if (overlapsBattery(x,y,z)) return;
+      const w = createWindow();
+      w.position.set(x, y, z);
+      w.rotation.y = Math.PI/2;
+      houseGroup.add(w);
+    });
+  });
+
+  // Lado direito
+  yLevels.forEach(y=>{
+    zColsSides.forEach(z=>{
+      const w = createWindow();
+      w.position.set(6.01, y, z);
+      w.rotation.y = -Math.PI/2;
+      houseGroup.add(w);
+    });
+  });
+}
+
+function createWindow(){
+  const windowGroup = new THREE.Group();
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.8, 0.2), materials.windowFrame);
+  windowGroup.add(frame);
+  const glass = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.6, 0.1), materials.windowGlass);
+  glass.position.z = 0.05;
+  windowGroup.add(glass);
+  return windowGroup;
+}
+
+function createDoor(){
+  const doorGroup = new THREE.Group();
+  const door = new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.3, 0.15), materials.door);
+  doorGroup.add(door);
+  const handle = new THREE.Mesh(new THREE.SphereGeometry(0.07), materials.chrome);
+  handle.position.set(0.4, 0, 0.1);
+  doorGroup.add(handle);
+  return doorGroup;
+}
+
+// ——— PV: agora na ÁGUA ESQUERDA e rodado 90° na superfície ———
+function createRoofSolarArray(){
+  const panelsX = 4, panelsY = 2, panelW = 1.8, panelH = 1.0, spacing = 0.1;
+  const arrayGroup = new THREE.Group();
+
+  for(let x=0;x<panelsX;x++){
+    for(let y=0;y<panelsY;y++){
+      const panel = createSingleSolarPanel(panelW, panelH);
+      panel.position.set(
+        (x - panelsX/2 + 0.5) * (panelW + spacing),
+        0,
+        (y - panelsY/2 + 0.5) * (panelH + spacing)
+      );
+      arrayGroup.add(panel);
+    }
+  }
+
+  // Colocar na ÁGUA ESQUERDA (x < 0), e pousar sobre o plano do telhado
+  const mountX = -2.2;         // lado esquerdo
+  const mountZ = -1.2;         // leve recuo
+  const clearance = 0.06;      // folga
+  const yOnRoof = roofYAtX(mountX);
+
+  arrayGroup.position.set(mountX, yOnRoof + clearance, mountZ);
+
+  // 1) inclinação do telhado (para a esquerda é +ROOF_SLOPE_RAD)
+  // 2) rodar 90° NO PLANO do telhado (aproximação boa: rotação em Y após inclinar)
+  arrayGroup.rotation.order = 'ZYX';
+  arrayGroup.rotation.z =  ROOF_SLOPE_RAD;   // assenta na água esquerda
+  arrayGroup.rotation.y =  Math.PI / 2;      // 90° na superfície (troca orientação)
+
+  scene.add(arrayGroup);
+  solarPanelArray = arrayGroup;
+}
+
+function createSingleSolarPanel(width, height){
+  const panelGroup = new THREE.Group();
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(width, 0.08, height), materials.solarFrame);
+  frame.castShadow = true;
+  panelGroup.add(frame);
+
+  const cellSize = 0.16;
+  const cellsX = Math.floor((width - 0.2) / (cellSize + 0.02));
+  const cellsY = Math.floor((height - 0.2) / (cellSize + 0.02));
+  const cellGeometry = new THREE.BoxGeometry(cellSize, 0.02, cellSize);
+
+  for(let x=0;x<cellsX;x++){
+    for(let y=0;y<cellsY;y++){
+      const cell = new THREE.Mesh(cellGeometry, materials.solarCell);
+      cell.position.set(
+        (x - cellsX/2 + 0.5) * (cellSize + 0.02),
+        0.05,
+        (y - cellsY/2 + 0.5) * (cellSize + 0.02)
+      );
+      panelGroup.add(cell);
+    }
+  }
+  return panelGroup;
+}
+
+function createWallMountedBattery(){
+  const batteryGroup = new THREE.Group();
+
+  // Corpo principal
+  const main = new THREE.Mesh(
+    new THREE.BoxGeometry(1.2, 2.5, 0.25),
+    materials.batteryCasing
+  );
+  main.castShadow = true;
+  main.receiveShadow = true;
+  batteryGroup.add(main);
+
+  // Painel frontal de vidro
+  const panel = new THREE.Mesh(
+    new THREE.BoxGeometry(1.15, 2.45, 0.05),
+    new THREE.MeshPhysicalMaterial({
+      color: 0x222222,
+      roughness: 0.1,
+      metalness: 0.7,
+      clearcoat: 0.9,
+      transmission: 0.3,
+      transparent: true
+    })
+  );
+  panel.position.z = 0.15;
+  batteryGroup.add(panel);
+
+  // Faixa lateral (detalhe metálico)
+  const accent = new THREE.Mesh(
+    new THREE.BoxGeometry(0.12, 2.45, 0.06),
+    materials.batteryAccent
+  );
+  accent.position.set(-0.515, 0, 0.18);
+  batteryGroup.add(accent);
+
+  // LEDs — agora na superfície oposta (parte de trás)
+  const ledGeom = new THREE.CircleGeometry(0.06, 20);
+  for (let i = 0; i < 9; i++) {
+    const ledMat = new THREE.MeshStandardMaterial({
+      color: 0x00ff88,
+      emissive: 0x00ff88,
+      emissiveIntensity: 2.5,
+      toneMapped: false
+    });
+    const led = new THREE.Mesh(ledGeom, ledMat);
+
+    // inverter a posição no eixo Z para o lado oposto
+    led.position.set(-0.415, -1.0 + i * 0.25, -0.23);
+    led.rotation.y = Math.PI; // virar para fora da parede
+    led.userData.isBatteryLED = true;
+    batteryGroup.add(led);
+  }
+
+  // Logotipo ou ecrã indicador
+  {
+    const logoTex = new THREE.TextureLoader().load('res/img.png');
+    logoTex.wrapS = logoTex.wrapT = THREE.ClampToEdgeWrapping;
+
+    const logoMat = new THREE.MeshBasicMaterial({
+      map: logoTex,
+      transparent: true,
+      toneMapped: false
+    });
+
+    // vertical (alto > largo)
+    const logo = new THREE.Mesh(new THREE.PlaneGeometry(2, 0.7), logoMat);
+
+    // mesma superfície dos LEDs: z = -0.23 e virado para fora
+    // deslocado em X para a direita para não os sobrepor (LEDs estão ~ em x=-0.415)
+    logo.position.set(0.15, 0.0, -0.23);
+    logo.rotation.y = Math.PI;
+    logo.rotation.z = Math.PI / 2;
+
+    batteryGroup.add(logo);
+  }
+
+  // Pequeno detalhe superior (ventilação / tampa)
+  const topCap = new THREE.Mesh(
+    new THREE.BoxGeometry(1.2, 0.1, 0.25),
+    new THREE.MeshStandardMaterial({ color: 0x444444, metalness: 0.5, roughness: 0.3 })
+  );
+  topCap.position.y = 1.25;
+  batteryGroup.add(topCap);
+
+  // Posição na cena
+  batteryGroup.position.set(-6.2, 3, 0);
+  batteryGroup.rotation.y = Math.PI / 2;
+
+  scene.add(batteryGroup);
+  batterySystem = batteryGroup;
+}
+
+
+function createImprovedCar(){
+  const carGroup = new THREE.Group();
+
+  // ===== MATERIALS =====
+  const paint = new THREE.MeshPhysicalMaterial({
+    color: 0x0dada1,
+    metalness: 0.9,
+    roughness: 0.2,
+    clearcoat: 1.0,
+    clearcoatRoughness: 0.05
+  });
+  
+  const glass = new THREE.MeshPhysicalMaterial({
+    color: 0x0a0a0a,
+    transmission: 0.9,
+    roughness: 0.05,
+    transparent: true,
+    opacity: 0.2
+  });
+  
+  const chrome = new THREE.MeshStandardMaterial({
+    color: 0xf0f0f0,
+    metalness: 1,
+    roughness: 0.1
+  });
+  
+  const blackPlastic = new THREE.MeshStandardMaterial({
+    color: 0x1a1a1a,
+    metalness: 0.3,
+    roughness: 0.7
+  });
+  
+  const rubber = new THREE.MeshStandardMaterial({
+    color: 0x0a0a0a,
+    roughness: 1.0
+  });
+
+  // ===== 1) MAIN BODY =====
+  const mainBody = new THREE.Mesh(
+    new THREE.BoxGeometry(4.2, 0.7, 1.9),
+    paint
+  );
+  mainBody.position.set(0, 0.8, 0);
+  mainBody.castShadow = true;
+  mainBody.receiveShadow = true;
+  carGroup.add(mainBody);
+
+  // ===== 2) CABIN =====
+  const cabin = new THREE.Mesh(
+    new THREE.BoxGeometry(2.2, 0.9, 1.7),
+    paint
+  );
+  cabin.position.set(-0.3, 1.6, 0);
+  cabin.castShadow = true;
+  carGroup.add(cabin);
+
+  // ===== 3) HOOD =====
+  const hood = new THREE.Mesh(
+    new THREE.BoxGeometry(1.5, 0.5, 1.8),
+    paint
+  );
+  hood.position.set(1.4, 1.35, 0);
+  hood.castShadow = true;
+  carGroup.add(hood);
+
+  // ===== 4) WINDSHIELD =====
+  const windshield = new THREE.Mesh(
+    new THREE.BoxGeometry(0.05, 0.7, 1.6),
+    glass
+  );
+  windshield.position.set(0.6, 1.7, 0);
+  windshield.rotation.z = -0.3;
+  carGroup.add(windshield);
+
+  // ===== 5) REAR WINDOW =====
+  const rearWindow = new THREE.Mesh(
+    new THREE.BoxGeometry(0.05, 0.6, 1.5),
+    glass
+  );
+  rearWindow.position.set(-1.2, 1.65, 0);
+  rearWindow.rotation.z = 0.25;
+  carGroup.add(rearWindow);
+
+  // ===== 6) SIDE WINDOWS =====
+  const sideWindowL = new THREE.Mesh(
+    new THREE.BoxGeometry(1.8, 0.6, 0.04),
+    glass
+  );
+  sideWindowL.position.set(-0.3, 1.65, 0.87);
+  carGroup.add(sideWindowL);
+  
+  const sideWindowR = sideWindowL.clone();
+  sideWindowR.position.z = -0.87;
+  carGroup.add(sideWindowR);
+
+  // ===== 7) ROOF =====
+  const roof = new THREE.Mesh(
+    new THREE.BoxGeometry(2.0, 0.05, 1.6),
+    paint
+  );
+  roof.position.set(-0.3, 2.05, 0);
+  carGroup.add(roof);
+
+  // ===== 8) FRONT BUMPER =====
+  const frontBumper = new THREE.Mesh(
+    new THREE.BoxGeometry(0.25, 0.4, 2.0),
+    blackPlastic
+  );
+  frontBumper.position.set(2.25, 0.6, 0);
+  frontBumper.castShadow = true;
+  carGroup.add(frontBumper);
+
+  // ===== 9) REAR BUMPER =====
+  const rearBumper = new THREE.Mesh(
+    new THREE.BoxGeometry(0.25, 0.4, 2.0),
+    blackPlastic
+  );
+  rearBumper.position.set(-2.25, 0.6, 0);
+  rearBumper.castShadow = true;
+  carGroup.add(rearBumper);
+
+  // ===== 10) GRILLE =====
+  const grille = new THREE.Mesh(
+    new THREE.BoxGeometry(0.08, 0.5, 1.4),
+    blackPlastic
+  );
+  grille.position.set(2.3, 1.0, 0);
+  carGroup.add(grille);
+
+  // ===== 11) HEADLIGHTS (with glow) =====
+  const headlightMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    emissive: 0xffffff,
+    emissiveIntensity: 2.5,
+    roughness: 0.1,
+    metalness: 0.9
+  });
+  
+  const headlightL = new THREE.Mesh(
+    new THREE.BoxGeometry(0.12, 0.22, 0.3),
+    headlightMat
+  );
+  headlightL.position.set(2.32, 1.3, 0.7);
+  carGroup.add(headlightL);
+  
+  const headlightR = headlightL.clone();
+  headlightR.position.z = -0.7;
+  carGroup.add(headlightR);
+
+  // Headlight spotlights
+  const spotL = new THREE.SpotLight(0xffffff, 1.5, 20, Math.PI/6, 0.3, 1.0);
+  spotL.position.set(2.5, 1.3, 0.7);
+  spotL.target.position.set(7, 0.5, 0.7);
+  carGroup.add(spotL, spotL.target);
+  
+  const spotR = new THREE.SpotLight(0xffffff, 1.5, 20, Math.PI/6, 0.3, 1.0);
+  spotR.position.set(2.5, 1.3, -0.7);
+  spotR.target.position.set(7, 0.5, -0.7);
+  carGroup.add(spotR, spotR.target);
+
+  // ===== 12) TAILLIGHTS (with glow) =====
+  const taillightMat = new THREE.MeshStandardMaterial({
+    color: 0xff0000,
+    emissive: 0xff0000,
+    emissiveIntensity: 1.5,
+    roughness: 0.2,
+    metalness: 0.7
+  });
+  
+  const taillightL = new THREE.Mesh(
+    new THREE.BoxGeometry(0.12, 0.3, 0.4),
+    taillightMat
+  );
+  taillightL.position.set(-2.32, 1.0, 0.7);
+  carGroup.add(taillightL);
+  
+  const taillightR = taillightL.clone();
+  taillightR.position.z = -0.7;
+  carGroup.add(taillightR);
+
+  // ===== 13) SIDE MIRRORS =====
+  const mirrorL = new THREE.Mesh(
+    new THREE.BoxGeometry(0.12, 0.1, 0.2),
+    paint
+  );
+  mirrorL.position.set(0.5, 1.7, 1.0);
+  carGroup.add(mirrorL);
+  
+  const mirrorR = mirrorL.clone();
+  mirrorR.position.z = -1.0;
+  carGroup.add(mirrorR);
+
+  // ===== 14) DOOR HANDLES =====
+  const handleL = new THREE.Mesh(
+    new THREE.BoxGeometry(0.2, 0.04, 0.06),
+    chrome
+  );
+  handleL.position.set(0.2, 1.2, 0.97);
+  carGroup.add(handleL);
+  
+  const handleR = handleL.clone();
+  handleR.position.z = -0.97;
+  carGroup.add(handleR);
+
+  // ===== 15) SPOILER =====
+
+
+  // ===== 16) EXHAUST =====
+  const exhaustGeom = new THREE.CylinderGeometry(0.07, 0.07, 0.3, 16);
+  const exhaustL = new THREE.Mesh(exhaustGeom, chrome);
+  exhaustL.rotation.z = Math.PI/2;
+  exhaustL.position.set(-2.4, 0.45, 0.45);
+  carGroup.add(exhaustL);
+  
+  const exhaustR = exhaustL.clone();
+  exhaustR.position.z = -0.45;
+  carGroup.add(exhaustR);
+
+  // ===== 17) CHARGE PORT (green glow) =====
+  const chargePort = new THREE.Mesh(
+    new THREE.CircleGeometry(0.12, 20),
+    new THREE.MeshBasicMaterial({
+      color: 0x00ff88,
+      emissive: 0x00ff88,
+      emissiveIntensity: 1.5
+    })
+  );
+  chargePort.rotation.y = Math.PI/2;
+  chargePort.position.set(-1.8, 1.1, 0.97);
+  carGroup.add(chargePort);
+
+  // ===== 18) WHEELS (properly oriented along car direction) =====
+  const wheelPositions = [
+    { x: 1.3, z: 1.05 },   // Front Left
+    { x: 1.3, z: -1.05 },  // Front Right
+    { x: -1.3, z: 1.05 },  // Rear Left
+    { x: -1.3, z: -1.05 }  // Rear Right
+  ];
+
+  wheelPositions.forEach(pos => {
+    const wheel = createSimpleWheel(rubber, chrome);
+    wheel.position.set(pos.x, 0.45, pos.z);
+    // Rotate wheel to align with car's forward direction (along X-axis)
+    wheel.rotation.x = Math.PI/2;
+    carGroup.add(wheel);
+  });
+
+  // ===== FINAL POSITIONING =====
+  carGroup.position.set(10, 0, -5);
+  carGroup.rotation.y = -Math.PI/6;
+
+  scene.add(carGroup);
+  evCar = carGroup;
+
+  // ===== SIMPLE WHEEL HELPER =====
+  function createSimpleWheel(tireMat, rimMat){
+    const wheelGroup = new THREE.Group();
+    
+    // Tire
+    const tire = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.45, 0.45, 0.25, 24),
+      tireMat
+    );
+    tire.castShadow = true;
+    wheelGroup.add(tire);
+
+    // Rim
+    const rim = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.32, 0.32, 0.27, 24),
+      rimMat
+    );
+    wheelGroup.add(rim);
+
+    // 5 Spokes
+    const spokeGeom = new THREE.BoxGeometry(0.04, 0.60, 0.05);
+    for(let i = 0; i < 5; i++){
+      const spoke = new THREE.Mesh(spokeGeom, rimMat);
+      spoke.rotation.z = (i / 5) * Math.PI * 2;
+      wheelGroup.add(spoke);
+    }
+
+    // Center cap
+    const cap = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.10, 0.10, 0.29, 16),
+      rimMat
+    );
+    wheelGroup.add(cap);
+
+    // Brake disc (silver)
+    const disc = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.28, 0.28, 0.02, 24),
+      new THREE.MeshStandardMaterial({
+        color: 0xaaaaaa,
+        metalness: 0.8,
+        roughness: 0.3
+      })
+    );
+    disc.position.y = 0.02;
+    wheelGroup.add(disc);
+
+    // Brake caliper (red)
+    const caliper = new THREE.Mesh(
+      new THREE.BoxGeometry(0.10, 0.18, 0.12),
+      new THREE.MeshStandardMaterial({
+        color: 0xdd0000,
+        metalness: 0.4,
+        roughness: 0.5
+      })
+    );
+    caliper.position.set(0.18, 0, 0.20);
+    wheelGroup.add(caliper);
+
+    return wheelGroup;
+  }
+}
+
+
+function createDetailedWheel(refined=false){
+  const wheelGroup = new THREE.Group();
+  const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.45,0.45,0.32,32), materials.tire);
+  tire.rotation.z = Math.PI/2; tire.castShadow = true; wheelGroup.add(tire);
+
+  const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.32,0.34,48), materials.chrome);
+  rim.rotation.z = Math.PI/2; wheelGroup.add(rim);
+
+  const spokeGeometry = new THREE.BoxGeometry(0.045, 0.6, 0.05);
+  const spokes = refined ? 8 : 5;
+  for(let i=0;i<spokes;i++){
+    const s = new THREE.Mesh(spokeGeometry, materials.chrome);
+    s.rotation.z = (i/spokes)*Math.PI*2;
+    wheelGroup.add(s);
+  }
+
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.11,0.36,24), materials.chrome);
+  cap.rotation.z = Math.PI/2; wheelGroup.add(cap);
+
+  return wheelGroup;
+}
+
+function createPowerGrid(){
+  const gridGroup = new THREE.Group();
+
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.25,0.35,14,16),
+                              new THREE.MeshStandardMaterial({color:0x3a2a1a, roughness:0.95}));
+  pole.position.y = 7; pole.castShadow = true; gridGroup.add(pole);
+
+  const crossArmMaterial = new THREE.MeshStandardMaterial({color:0x2a2a2a, roughness:0.6, metalness:0.7});
+  for(let i=0;i<3;i++){
+    const crossArm = new THREE.Mesh(new THREE.BoxGeometry(8,0.25,0.25), crossArmMaterial);
+    crossArm.position.y = 11 - i*2; crossArm.castShadow = true; gridGroup.add(crossArm);
+  }
+
+  const transformer = new THREE.Mesh(new THREE.BoxGeometry(1.8,2.2,1.5),
+                                     new THREE.MeshStandardMaterial({color:0x3a4050, roughness:0.7, metalness:0.4}));
+  transformer.position.set(0, 1.3, -2.5); transformer.castShadow = true; gridGroup.add(transformer);
+
+  gridGroup.position.set(-18, 0.12, -10); // no nível do “lote”
+  scene.add(gridGroup);
+  powerGrid = gridGroup;
+}
+
+function createCableSystem(){
+  cableSystem = [];
+
+  const vertsMap = new Map();
+  const keyOf = (x, z) => `${Math.round(x*1000)},${Math.round(z*1000)}`;
+
+  // Recolhe os cantos superiores de cada célula em coords LOCAIS do array (antes da rotação do telhado)
+  solarPanelArray.traverse(obj => {
+    if (obj.isMesh && obj.material === materials.solarCell) {
+      const gp = obj.geometry.parameters || { width:0.16, height:0.02, depth:0.16 };
+      const h2 = (gp.height || 0.02)/2;
+      const localCorners = [
+        new THREE.Vector3(-gp.width/2,  h2+0.001, -gp.depth/2),
+        new THREE.Vector3( gp.width/2,  h2+0.001, -gp.depth/2),
+        new THREE.Vector3( gp.width/2,  h2+0.001,  gp.depth/2),
+        new THREE.Vector3(-gp.width/2,  h2+0.001,  gp.depth/2),
+      ];
+      localCorners.forEach(v=>{
+        const w = v.clone();                // canto no espaço da célula
+        obj.localToWorld(w);               // → mundo
+        const a = solarPanelArray.worldToLocal(w); // → local do array (plano do painel)
+        const k = keyOf(a.x, a.z);
+        if (!vertsMap.has(k)) vertsMap.set(k, a.clone()); // deduplica vértices partilhados
+      });
+    }
+  });
+
+  // Constrói grelha ordenada (colunas X, linhas Z) e caminho em serpentina
+  const unique = [...vertsMap.values()];
+  const Xs = [...new Set(unique.map(v=>v.x))].sort((a,b)=>a-b);
+  const Zs = [...new Set(unique.map(v=>v.z))].sort((a,b)=>a-b);
+
+  const pvPathWorld = [];
+  for (let zi = 0; zi < Zs.length; zi++) {
+    const xs = zi % 2 ? [...Xs].reverse() : Xs; // serpentina
+    xs.forEach(x=>{
+      const k = keyOf(x, Zs[zi]);
+      const a = vertsMap.get(k).clone();
+      a.y += 0.002; // ligeiro lift para não colidir com o painel
+      const w = a.clone();
+      solarPanelArray.localToWorld(w); // volta ao mundo
+      pvPathWorld.push(w);
+    });
+  }
+
+  const last = pvPathWorld[pvPathWorld.length-1] ?? solarPanelArray.position.clone();
+
+  const mountX = -2.2;   // mesma posição do array no telhado
+  const mountZ = -1.2;
+  const roofLift = 0.02; // folga para não colidir
+
+  const roofPointAt = (x, z) => new THREE.Vector3(x, roofYAtX(x) + roofLift, z);
+
+  // ponto de transição: sair do painel para a água onde ele está montado
+  const offPanel = roofPointAt(mountX, mountZ);
+
+  // percurso pela água (telhado esquerdo) até à parede esquerda (x ≈ -6.2)
+  const steps = 8;
+  const roofRun = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const x = mountX + (-6.2 - mountX) * t; // de mountX → -6.2
+    roofRun.push(roofPointAt(x, mountZ));
+  }
+
+  // mudar do beiral (z = mountZ) para a “calha” junto à bateria e descer na parede
+  const toWall = roofPointAt(-6.2, 0.0);
+  const downToBattery = new THREE.Vector3(-6.2, 3.0, 0.0);
+
+  const pvToBatteryPoints = [
+    ...pvPathWorld,   // atravessa os sub-quadrados na superfície do painel (exterior)
+    offPanel,         // sai do painel para a água
+    ...roofRun,       // corre pela água até à parede
+    toWall,           // alonga no beiral até alinhar com a bateria
+    downToBattery     // desce a parede até à bateria
+  ];
+
+  // (opcional) remove cabo antigo se existir
+  const oldPV = scene.getObjectByName('solar-battery');
+  if (oldPV) scene.remove(oldPV);
+
+  const solarToBattery = createPerpendicularCable(pvToBatteryPoints, 0xffd700, 'solar-battery', 20);
+  cableSystem.push(solarToBattery);
+
+  const batteryToHouse = createPerpendicularCable([
+    new THREE.Vector3(-6.2,3,0),
+    new THREE.Vector3(-6.2,3,2),
+    new THREE.Vector3(-6.2,3,4),
+    new THREE.Vector3(-6.2,2,4),
+    new THREE.Vector3(-4,  2,4),
+    new THREE.Vector3(-4,  2,5),
+    new THREE.Vector3(-3,  2,5.1)
+  ], 0x00ff88, 'battery-house', 18);
+  cableSystem.push(batteryToHouse);
+
+  const batteryToEV = createPerpendicularCable([
+    new THREE.Vector3(-6.2,3,0),
+    new THREE.Vector3(-6.2,1.2,0),
+    new THREE.Vector3(-6.2,1.2,3),
+    new THREE.Vector3(0,   1.2,3),
+    new THREE.Vector3(6,   1.2,3),
+    new THREE.Vector3(6,   0.3,3),
+    new THREE.Vector3(8,   0.3,0),
+    new THREE.Vector3(10,  0.3,-5)
+  ], 0xff00ff, 'battery-ev', 30);
+  cableSystem.push(batteryToEV);
+
+  const gridToHouse = createPerpendicularCable([
+    new THREE.Vector3(-18, 8+0.12, -10),
+    new THREE.Vector3(-18, 2+0.12, -10),
+    new THREE.Vector3(-12, 2+0.12, -10),
+    new THREE.Vector3(-6,  2+0.12, -5),
+    new THREE.Vector3(-6,  2+0.12,  0),
+    new THREE.Vector3(-6,  2+0.12,  3),
+    new THREE.Vector3(-4,  2+0.12,  5),
+    new THREE.Vector3(-3,  2+0.12,  5.1)
+  ], 0x0066ff, 'grid-house', 22);
+  cableSystem.push(gridToHouse);
+}
+
+function createPerpendicularCable(points, color, name, particleCount){
+  const cableGroup = new THREE.Group();
+  cableGroup.name = name;
+
+  const cableMaterial = new THREE.MeshStandardMaterial({
+    color, roughness:0.5, metalness:0.6, emissive:color, emissiveIntensity:0.15
+  });
+
+  for(let i=0;i<points.length-1;i++){
+    const start = points[i], end = points[i+1];
+    const direction = new THREE.Vector3().subVectors(end, start);
+    const length = direction.length();
+    const center = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+    const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,length,8), cableMaterial);
+
+    cable.position.copy(center);
+    const axis = new THREE.Vector3(0,1,0);
+    const quaternion = new THREE.Quaternion().setFromUnitVectors(axis, direction.clone().normalize());
+    cable.quaternion.copy(quaternion);
+    cable.castShadow = true; cable.receiveShadow = true;
+    cableGroup.add(cable);
+
+    if(i>0 && i<points.length-1){
+      const junction = new THREE.Mesh(new THREE.BoxGeometry(0.12,0.12,0.12),
+        new THREE.MeshStandardMaterial({color:0x1a1a1a, roughness:0.6, metalness:0.7}));
+      junction.position.copy(points[i]); junction.castShadow = true;
+      cableGroup.add(junction);
+    }
+  }
+
+  const curve = new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0.1);
+  for(let i=0;i<particleCount;i++){
+    const particle = new THREE.Mesh(new THREE.SphereGeometry(0.1),
+      new THREE.MeshBasicMaterial({color, transparent:true, opacity:0.95}));
+    const glow = new THREE.Mesh(new THREE.SphereGeometry(0.22),
+      new THREE.MeshBasicMaterial({color, transparent:true, opacity:0.25, side:THREE.BackSide}));
+    particle.add(glow);
+    particle.userData = {
+      curve,
+      progress: i/particleCount,
+      speed: 0.002 + Math.random()*0.0035,
+      baseOpacity: 0.8 + Math.random()*0.2,
+      baseScale: 0.8 + Math.random()*0.4
+    };
+    cableGroup.add(particle);
+  }
+
+  scene.add(cableGroup);
+  return cableGroup;
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+
+  const elapsedTime = clock.getElapsedTime();
+
+
+  // --- ÓRBITA que aproxima da bateria ao passar pela parede esquerda ---
+  const PHASE0 = Math.PI; // começa virado à parede esquerda
+  const phi = elapsedTime * ROT_SPEED + PHASE0;
+
+  // quão perto estamos da direção da parede esquerda (phi = π)
+  const diff = Math.atan2(Math.sin(phi - Math.PI), Math.cos(phi - Math.PI)); // [-π, π]
+  const WIDTH = 2;                  // largura angular da aproximação (radianos)
+  const t0 = Math.max(0, 1 - Math.abs(diff) / WIDTH); // [0..1]
+  const t = t0 * t0 * (3 - 2 * t0);   // smoothstep
+
+  const APPROACH = 6;                // encurtar raio em até 10 unidades
+  const radius = ORBIT_RADIUS - APPROACH * t;
+
+  camera.position.x = radius * Math.cos(phi);
+  camera.position.z = radius * Math.sin(phi);
+  camera.position.y =  7+ Math.sin(elapsedTime * 0.6) * 3 - 1 * t; // baixa um pouco ao aproximar
+
+  // transição suave do lookAt: origem → bateria
+  const targetBase = new THREE.Vector3(0, 3, 0);
+  const targetBattery = new THREE.Vector3(-6.2, 3.0, 0.0);
+  const lookAtTarget = targetBase.clone().lerp(targetBattery, t);
+  camera.lookAt(lookAtTarget);
+
+
+  cableSystem.forEach(group=>{
+    group.children.forEach(child=>{
+      if(child.userData && child.userData.curve){
+        child.userData.progress += child.userData.speed;
+        if(child.userData.progress>1) child.userData.progress = 0;
+        const p = child.userData.curve.getPoint(child.userData.progress);
+        child.position.copy(p);
+        const s = child.userData.baseScale*(1 + Math.sin(elapsedTime*4 + child.userData.progress*Math.PI*2)*0.2);
+        child.scale.set(s,s,s);
+        const op = child.userData.baseOpacity*(0.5 + Math.sin(child.userData.progress*Math.PI)*0.5);
+        child.material.opacity = op;
+        if(child.children[0]) child.children[0].material.opacity = op*0.25;
+      }
+    });
+  });
+
+  if(batterySystem){
+    batterySystem.children.forEach((child, idx)=>{
+      if(child.userData && child.userData.isBatteryLED){
+        const intensity = 1.5 + Math.sin(elapsedTime*3 + idx*0.5)*1.5;
+        child.material.emissiveIntensity = intensity;
+      }
+    });
+  }
+
+  if(solarPanelArray){
+    solarPanelArray.children.forEach((panel, i)=>{
+      panel.children.forEach((child, j)=>{
+        if(child.material === materials.solarCell){
+          const shimmer = 0.9 + Math.sin(elapsedTime*1.5 + i*0.3 + j*0.1)*0.1;
+          child.material.clearcoat = shimmer;
+        }
+      });
+    });
+  }
+
+  renderer.render(scene, camera);
+}
+
+window.addEventListener('resize', ()=>{
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+init();
+animate();
+</script>
+</body>
+</html>
