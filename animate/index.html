@@ -59,9 +59,12 @@ function init(){
   camera.lookAt(0, 3, 0);
 
   renderer = new THREE.WebGLRenderer({
-    canvas: document.getElementById('canvas'),
-    antialias:true, alpha:false
-  });
+  canvas: document.getElementById('canvas'),
+  antialias: true,
+  alpha: false,
+  logarithmicDepthBuffer: true
+});
+
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
@@ -1166,7 +1169,7 @@ function animate(){
   const t0 = Math.max(0, 1 - Math.abs(diff) / WIDTH); // [0..1]
   const t = t0 * t0 * (3 - 2 * t0);   // smoothstep
 
-  const APPROACH = 6;                // encurtar raio em até 10 unidades
+  const APPROACH = 8;                // encurtar raio em até 10 unidades
   const radius = ORBIT_RADIUS - APPROACH * t;
 
   camera.position.x = radius * Math.cos(phi);
