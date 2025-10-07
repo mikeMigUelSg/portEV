@@ -268,7 +268,7 @@ function createEnvironment(){
 
   // gera uma textura de azulejo (checker + juntas)
   function makeTileTexture(c1, c2){
-    const S = 50, TILE = 25, GROUT = 1; // dimensão, tamanho do azulejo e junta
+    const S = 30, TILE = 15, GROUT = 2; // dimensão, tamanho do azulejo e junta
     const cv = document.createElement('canvas'); cv.width = cv.height = S;
     const ctx = cv.getContext('2d');
 
@@ -1169,7 +1169,7 @@ function animate(){
   const t0 = Math.max(0, 1 - Math.abs(diff) / WIDTH); // [0..1]
   const t = t0 * t0 * (3 - 2 * t0);   // smoothstep
 
-  const APPROACH = 8;                // encurtar raio em até 10 unidades
+  const APPROACH = 10;                // encurtar raio em até 10 unidades
   const radius = ORBIT_RADIUS - APPROACH * t;
 
   camera.position.x = radius * Math.cos(phi);
