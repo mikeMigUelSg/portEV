@@ -260,21 +260,20 @@ function createEnvironment(){
   grid.renderOrder = 0;
   scene.add(grid);
 
-  // ====== “Lote” de concreto com textura de azulejos ======
-  // ====== “Lote” com azulejos nas cores CSS --primary / --secondary ======
+  // ====== "Lote" de concreto com azulejos nas cores CSS ======
   const css = getComputedStyle(document.documentElement);
   const PRIMARY   = (css.getPropertyValue('--primary')   || '#00ff88').trim();
   const SECONDARY = (css.getPropertyValue('--secondary') || '#0066ff').trim();
 
-  // gera uma textura de azulejo (checker + juntas)
+  // gera uma textura de azulejo simples (sem logo)
   function makeTileTexture(c1, c2){
-    const S = 30, TILE = 15, GROUT = 2; // dimensão, tamanho do azulejo e junta
+    const S = 30, TILE = 15, GROUT = 2;
     const cv = document.createElement('canvas'); cv.width = cv.height = S;
     const ctx = cv.getContext('2d');
 
     for(let y=0; y<S; y+=TILE){
       for(let x=0; x<S; x+=TILE){
-        ctx.fillStyle = ((x+y)/TILE) % 2 ? c1 : c2;   // padrão xadrez
+        ctx.fillStyle = ((x+y)/TILE) % 2 ? c1 : c2;
         ctx.fillRect(x, y, TILE, TILE);
         // juntas (grout)
         ctx.fillStyle = 'rgba(0,0,0,0.25)';
@@ -288,7 +287,7 @@ function createEnvironment(){
 
     const tex = new THREE.CanvasTexture(cv);
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(8, 8); // nº de azulejos no lote (ajusta à tua escala)
+    tex.repeat.set(8, 8);
     return tex;
   }
 
@@ -310,6 +309,46 @@ function createEnvironment(){
   lot.receiveShadow = true;
   scene.add(lot);
 
+  // ====== ADICIONAR LOGOS OPACOS EM CADA TILE ======
+// ====== ADICIONAR LOGOS OPACOS EM CADA TILE ======
+const logoTex = new THREE.TextureLoader().load('res/img.png');
+logoTex.wrapS = logoTex.wrapT = THREE.ClampToEdgeWrapping;
+
+const logoMat = new THREE.MeshBasicMaterial({
+  map: logoTex,
+  transparent: false, // SEM transparência
+  toneMapped: false
+});
+
+const tilesPerSide = 16; // 8 repetições * 2 tiles por padrão = 16 tiles
+const tileSize = 70 / tilesPerSide; // tamanho de cada tile
+const logoSizeX = tileSize * 0.3; 
+const logoSizeY = tileSize * 0.7; 
+
+// Criar grid de logos alternados - UM LOGO POR TILE
+for(let row = 0; row < tilesPerSide; row++){
+  for(let col = 0; col < tilesPerSide; col++){
+    const isVertical = (row + col) % 2 === 0;
+    
+    const logo = new THREE.Mesh(
+      new THREE.PlaneGeometry(logoSizeY, logoSizeX),
+      logoMat.clone() // clone para cada logo
+    );
+    
+    // Posição no grid - centro de cada tile
+    const x = -35 + (col + 0.5) * tileSize;
+    const z = -35 + (row + 0.5) * tileSize;
+    
+    logo.position.set(x, 0.13, z); // ligeiramente acima do lote
+    logo.rotation.x = -Math.PI/2; // deitado no chão
+    
+    if(!isVertical){
+      logo.rotation.z = Math.PI/2; // rodar 90° para horizontal
+    }
+    
+    scene.add(logo);
+  }
+}
 }
 
 
