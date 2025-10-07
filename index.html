@@ -498,6 +498,47 @@
                 grid-template-columns: 1fr;
             }
         }
+        /* === Secção Interativa 3D === */
+.interactive{
+  padding: 120px 50px;
+  background: linear-gradient(180deg, var(--darker) 0%, var(--dark) 100%);
+  position: relative;
+}
+.interactive-inner{
+  max-width: 1200px;
+  margin: 0 auto;
+  text-align: center;
+}
+.interactive-subtitle{
+  color: rgba(255,255,255,0.8);
+  font-size: clamp(16px, 2.2vw, 22px);
+  margin: -10px auto 30px;
+}
+.three-embed{
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: 0 30px 80px rgba(0,0,0,0.35);
+  /* mantém proporção e adapta-se ao ecrã */
+  aspect-ratio: 16 / 9;
+}
+.three-embed iframe{
+  width: 100%;
+  height: 100%;
+  display: block;
+  border: 0;
+  background: #050812;
+}
+
+/* mobile */
+@media (max-width: 768px){
+  .interactive{ padding: 80px 20px; }
+  .three-embed{ aspect-ratio: 16 / 10; }
+}
+
     </style>
 </head>
 <body>
@@ -514,6 +555,7 @@
             <a href="#features" data-en="Features" data-pt="Funcionalidades">Features</a>
             <a href="#benefits" data-en="Benefits" data-pt="Benefícios">Benefits</a>
             <a href="#pricing" data-en="Pricing" data-pt="Preços">Pricing</a>
+            <a href="#interactive" data-en="Interactive" data-pt="Interativo">Interactive</a>
         </div>
     </nav>
 
@@ -522,8 +564,32 @@
             <h1 data-en="Power Your Home, Sustainably" data-pt="Energize a Sua Casa, Sustentavelmente">Power Your Home, Sustainably</h1>
             <p class="subtitle" data-en="Premium second-life battery systems at a fraction of the cost" data-pt="Sistemas de baterias segunda vida premium a uma fração do custo">Premium second-life battery systems at a fraction of the cost</p>
             <a href="#pricing" class="cta-button"><span data-en="Get Started" data-pt="Começar Agora">Get Started</span></a>
+            
         </div>
     </section>
+
+    <section id="interactive" class="interactive">
+        <div class="interactive-inner">
+          <h2 class="section-title">
+            Interactive 3D Energy Flow
+          </h2>
+          <p class="interactive-subtitle">
+            Explore how energy flows between solar panels, battery storage, your home, and the grid in real-time.
+          </p>
+      
+          <!-- Carrega /animate/index.html sem cliques; animação arranca sozinha -->
+          <div class="three-embed">
+            <iframe
+              src="animate/index.html"
+              title="PortEV 3D Energy Flow"
+              loading="eager"
+              allow="autoplay"
+              referrerpolicy="no-referrer"
+            ></iframe>
+          </div>
+        </div>
+      </section>
+      
 
     <section id="features" class="features">
         <div class="features-grid">
@@ -607,6 +673,8 @@
             </div>
         </div>
     </section>
+
+    
 
     <section id="benefits" class="benefits">
         <h2 class="section-title" data-en="Why Choose PortEV?" data-pt="Porquê Escolher a PortEV?">Why Choose PortEV?</h2>
