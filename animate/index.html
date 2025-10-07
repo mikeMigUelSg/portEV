@@ -117,7 +117,7 @@ function createMaterials(){
 
   // ===== MATERIAIS =====
   materials.brick = new THREE.MeshStandardMaterial({
-    color: 0x8B4513,
+    color: 0xa1d99a,
     roughness: 0.95,
     metalness: 0,
     normalMap: noiseTexture,
@@ -125,7 +125,7 @@ function createMaterials(){
   });
 
   materials.darkRoof = new THREE.MeshStandardMaterial({
-    color: 0x5a5a5a,
+    color: 0xb05f56,
     roughness: 0.8,
     metalness: 0.2,
     normalMap: noiseTexture,
@@ -341,6 +341,7 @@ for(let row = 0; row < tilesPerSide; row++){
     
     logo.position.set(x, 0.13, z); // ligeiramente acima do lote
     logo.rotation.x = -Math.PI/2; // deitado no chão
+    
     
     if(!isVertical){
       logo.rotation.z = Math.PI/2; // rodar 90° para horizontal
